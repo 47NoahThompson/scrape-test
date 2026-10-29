@@ -6,4 +6,14 @@ body:
     attributes:
       value: |
         Submit this request to start the RightMoveRX video scraper.
-        The workflow will update `videos.json` and report the result here.
+        The workflow will update videos.json and report the result here.
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirm update request
+      options:
+        - label: I want to start the video database update.
+          required: true
+    validations:
+      required: true
