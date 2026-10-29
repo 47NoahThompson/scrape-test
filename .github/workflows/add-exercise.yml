@@ -11,7 +11,6 @@ permissions:
 jobs:
   add-exercise:
     if: contains(github.event.issue.labels.*.name, 'exercise-submission')
-
     runs-on: ubuntu-latest
 
     steps:
@@ -30,13 +29,27 @@ jobs:
         continue-on-error: true
         run: python .github/scripts/add_exercise.py
 
+      - name: Commit updated video library
+        id: commit
+        if: steps.update.outcome == 'success'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add videos.json
+          git commit -m "Add exercise from issue #${{ github.event.issue.number }}"
+          git push origin HEAD:main
+
       - name: Report result
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const issue_number = context.issue.number;
-            const succeeded = '${{ steps.update.outcome }}' === 'success';
+
+            const succeeded =
+              '${{ steps.update.outcome }}' === 'success' &&
+              '${{ steps.commit.outcome }}' === 'success';
 
             if (succeeded) {
               await github.rest.issues.createComment({
@@ -54,15 +67,6 @@ jobs:
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number,
-                body: 'There was a problem adding this exercise to `videos.json`. Please check the GitHub Actions run for details.'
+                body: 'There was a problem adding this exercise. Please check the GitHub Actions run for details.'
               });
             }
-
-      - name: Commit updated video library
-        if: steps.update.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add videos.json
-          git commit -m "Add exercise from issue #${{ github.event.issue.number }}"
-          git push origin HEAD:main
