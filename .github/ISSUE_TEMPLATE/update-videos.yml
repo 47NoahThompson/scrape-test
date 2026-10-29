@@ -30,14 +30,26 @@ body:
     validations:
       required: true
 
-  - type: input
+    - type: checkboxes
     id: tags
     attributes:
-      label: Tags
-      description: Enter tags separated by commas.
-      placeholder: Knee, Lower Leg, Strength
+      label: Exercise Tags
+      description: Select all tags that apply to this exercise.
+      options:
+        - label: Head/Neck
+        - label: Shoulders
+        - label: Chest
+        - label: Arms
+        - label: Back
+        - label: Low Back
+        - label: Core
+        - label: Hip/Pelvis
+        - label: Upper Leg
+        - label: Knee
+        - label: Lower Leg
+        - label: Foot/Ankle
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: description
