@@ -30,7 +30,7 @@ body:
     validations:
       required: true
 
-    - type: checkboxes
+  - type: checkboxes
     id: tags
     attributes:
       label: Exercise Tags
