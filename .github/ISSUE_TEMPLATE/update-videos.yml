@@ -1,19 +1,13 @@
-name: Update RightMoveRX videos
-description: Request a refresh of the RightMoveRX YouTube video database.
-title: "Update RightMoveRX videos"
-body:
-  - type: markdown
-    attributes:
-      value: |
-        Submit this request to start the RightMoveRX video scraper.
-        The workflow will update videos.json and report the result here.
-
-  - type: checkboxes
-    id: confirmation
-    attributes:
-      label: Confirm update request
-      options:
-        - label: I want to start the video database update.
-          required: true
-    validations:
-      required: true
+[
+  {
+    "id": 0,
+    "name": "Backwards Step Up",
+    "link": "https://www.youtube.com/watch?v=FHD3of0egaU",
+    "description": "Instructions for performing a backwards step up.",
+    "tags": [
+      "Knee",
+      "Lower Leg",
+      "Strength"
+    ]
+  }
+]
