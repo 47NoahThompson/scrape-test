@@ -1,0 +1,89 @@
+name: Update RightMoveRX Videos
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: rightmoverx-video-update
+  cancel-in-progress: false
+
+jobs:
+  update-videos:
+    # Only the exact request created by the website's issue form starts the scraper.
+    if: github.event.issue.title == 'Update RightMoveRX videos'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Publish running status
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          mkdir -p docs
+          printf '{\n  "status": "running",\n  "message": "The video scraper is running.",\n  "issue_number": %s,\n  "updated_at": "%s"\n}\n' \
+            "$ISSUE_NUMBER" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > docs/status.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/status.json
+          git commit -m "Mark RightMoveRX video update as running"
+          git pull --rebase origin main
+          git push
+
+      - name: Run YouTube scraper
+        id: scraper
+        run: python scraper.py
+
+      - name: Validate videos database
+        run: python -m json.tool videos.json > /dev/null
+
+      - name: Publish result and update request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          JOB_RESULT: ${{ job.status }}
+        run: |
+          mkdir -p docs
+
+          if [ "$JOB_RESULT" = "success" ]; then
+            STATUS="success"
+            MESSAGE="The video database was updated successfully."
+          else
+            STATUS="failure"
+            MESSAGE="The video update failed. Check the linked GitHub Actions run for details."
+          fi
+
+          printf '{\n  "status": "%s",\n  "message": "%s",\n  "issue_number": %s,\n  "updated_at": "%s"\n}\n' \
+            "$STATUS" "$MESSAGE" "$ISSUE_NUMBER" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > docs/status.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add videos.json docs/status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update RightMoveRX video database and status"
+            git pull --rebase origin main
+            git push
+          fi
+
+          if [ "$STATUS" = "success" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "Video update completed successfully."
+            gh issue close "$ISSUE_NUMBER"
+          else
+            gh issue comment "$ISSUE_NUMBER" --body "The video update failed. Please check the Actions run for the error details."
+          fi
