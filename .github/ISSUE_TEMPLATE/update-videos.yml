@@ -1,13 +1,53 @@
-[
-  {
-    "id": 0,
-    "name": "Backwards Step Up",
-    "link": "https://www.youtube.com/watch?v=FHD3of0egaU",
-    "description": "Instructions for performing a backwards step up.",
-    "tags": [
-      "Knee",
-      "Lower Leg",
-      "Strength"
-    ]
-  }
-]
+
+name: Add Exercise Video
+description: Submit a new exercise video to the RightMoveRX library.
+title: "Add Exercise: "
+labels:
+  - exercise-submission
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for contributing to the RightMoveRX exercise library!
+        Please complete all four fields below.
+
+  - type: input
+    id: exercise_name
+    attributes:
+      label: Exercise Name
+      description: What is the name of this exercise?
+      placeholder: Backwards Step Up
+    validations:
+      required: true
+
+  - type: input
+    id: video_link
+    attributes:
+      label: Video Link
+      description: Provide the YouTube URL for this exercise.
+      placeholder: https://www.youtube.com/watch?v=...
+    validations:
+      required: true
+
+  - type: input
+    id: tags
+    attributes:
+      label: Tags
+      description: Enter tags separated by commas.
+      placeholder: Knee, Lower Leg, Strength
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Explain how to perform the exercise and include any relevant instructions.
+      placeholder: |
+        1. Stand with your feet shoulder-width apart.
+        2. Step backwards onto the platform.
+        3. Return to the starting position.
+      render: text
+    validations:
+      required: true
