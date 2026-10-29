@@ -1,0 +1,68 @@
+name: Add Exercise to Video Library
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  add-exercise:
+    if: contains(github.event.issue.labels.*.name, 'exercise-submission')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Update videos.json
+        id: update
+        continue-on-error: true
+        run: python .github/scripts/add_exercise.py
+
+      - name: Report result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            const succeeded = '${{ steps.update.outcome }}' === 'success';
+
+            if (succeeded) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number,
+                body: 'Successfully added this exercise to `videos.json`!'
+              });
+
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number,
+                state: 'closed'
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number,
+                body: 'There was a problem adding this exercise to `videos.json`. Please check the GitHub Actions run for details.'
+              });
+            }
+
+      - name: Commit updated video library
+        if: steps.update.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add videos.json
+          git commit -m "Add exercise from issue #${{ github.event.issue.number }}"
+          git push origin HEAD:main
