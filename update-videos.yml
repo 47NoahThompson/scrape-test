@@ -1,9 +1,0 @@
-name: Update RightMoveRX videos
-description: Request a refresh of the RightMoveRX YouTube video database.
-title: "Update RightMoveRX videos"
-body:
-  - type: markdown
-    attributes:
-      value: |
-        Submit this request to start the RightMoveRX video scraper.
-        The workflow will update `videos.json` and report the result here.
