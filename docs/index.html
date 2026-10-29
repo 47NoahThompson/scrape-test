@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RightMoveRX Video Admin</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f3f6f9; color: #17212b; }
+    main { width: min(92vw, 520px); box-sizing: border-box; padding: 32px; background: white; border: 1px solid #dce3ea; border-radius: 16px; box-shadow: 0 12px 36px #17212b12; }
+    h1 { margin-top: 0; font-size: 1.6rem; }
+    p { line-height: 1.5; color: #526170; }
+    button { width: 100%; padding: 14px 18px; border: 0; border-radius: 9px; background: #0163aa; color: white; font-size: 1rem; font-weight: 650; cursor: pointer; }
+    button:hover { background: #014f88; }
+    .status { margin-top: 22px; padding: 14px; border-radius: 9px; background: #f0f3f6; }
+    .status strong { display: block; margin-bottom: 5px; }
+    .status.running { background: #fff5d9; }
+    .status.success { background: #e7f7ed; }
+    .status.failure { background: #fdebea; }
+    small { color: #667585; }
+    a { color: #0163aa; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>RightMoveRX Video Admin</h1>
+    <p>Request an update to the RightMoveRX YouTube video database.</p>
+    <button id="updateButton" type="button">Update Videos</button>
+
+    <section id="status" class="status" aria-live="polite">
+      <strong id="statusTitle">Checking status…</strong>
+      <span id="statusMessage">Loading the latest update status.</span>
+      <p id="requestLink"></p>
+      <small id="updatedAt"></small>
+    </section>
+
+    <p><small>Submitting an update request requires a GitHub account. You do not need access to the repository.</small></p>
+  </main>
+
+  <script>
+    const OWNER = "47NoahThompson";
+    const REPO = "rmx-yt-screapper";
+    const ISSUE_URL = `https://github.com/${OWNER}/${REPO}/issues/new?template=update-videos.yml`;
+    const STATUS_URL = `https://raw.githubusercontent.com/${OWNER}/${REPO}/main/docs/status.json`;
+
+    document.getElementById("updateButton").addEventListener("click", () => {
+      window.location.href = ISSUE_URL;
+    });
+
+    async function refreshStatus() {
+      const panel = document.getElementById("status");
+      try {
+        const response = await fetch(`${STATUS_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Could not load status");
+        const data = await response.json();
+
+        panel.className = `status ${data.status || ""}`;
+        document.getElementById("statusTitle").textContent = {
+          idle: "Ready",
+          running: "Update in progress",
+          success: "Update completed",
+          failure: "Update failed"
+        }[data.status] || "Status unavailable";
+
+        document.getElementById("statusMessage").textContent =
+          data.message || "No status message is available.";
+
+        const link = document.getElementById("requestLink");
+        link.replaceChildren();
+        if (data.issue_number) {
+          const a = document.createElement("a");
+          a.href = `https://github.com/${OWNER}/${REPO}/issues/${data.issue_number}`;
+          a.textContent = `View request #${data.issue_number}`;
+          a.target = "_blank";
+          a.rel = "noopener";
+          link.appendChild(a);
+        }
+
+        document.getElementById("updatedAt").textContent = data.updated_at
+          ? `Last status update: ${new Date(data.updated_at).toLocaleString()}`
+          : "";
+      } catch (error) {
+        document.getElementById("statusTitle").textContent = "Status unavailable";
+        document.getElementById("statusMessage").textContent =
+          "Could not retrieve the latest status. Please try again shortly.";
+      }
+    }
+
+    refreshStatus();
+    setInterval(refreshStatus, 15000);
+  </script>
+</body>
+</html>
