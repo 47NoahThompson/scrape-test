@@ -80,4 +80,3 @@ jobs:
                 body: 'There was a problem adding this exercise. Please check the GitHub Actions run for details.'
               });
             }
-```
