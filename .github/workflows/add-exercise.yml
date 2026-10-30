@@ -85,6 +85,8 @@ jobs:
         id: update
         if: steps.validate.outcome == 'success'
         continue-on-error: true
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           echo "::group::Running Python Script"
 
