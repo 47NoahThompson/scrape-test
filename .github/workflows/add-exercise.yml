@@ -4,37 +4,70 @@ on:
   issues:
     types: [opened, labeled]
 
+# Permissions required to update videos.json and manage issues.
 permissions:
   contents: write
   issues: write
 
+# Prevent multiple submissions from updating videos.json simultaneously.
+concurrency:
+  group: add-exercise-video-library
+  queue: max
+
 jobs:
   add-exercise:
-    # Only process issues with the exercise-submission label.
-    if: contains(github.event.issue.labels.*.name, 'exercise-submission')
+    # Only process submissions with the correct label.
+    if: >-
+      contains(github.event.issue.labels.*.name, 'exercise-submission') &&
+      (
+        github.event.action == 'opened' ||
+        (
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'exercise-submission'
+        )
+      )
 
     runs-on: ubuntu-latest
 
     steps:
-      # Get the repository files.
+      # Check whether this issue is still open.
+      - name: Check issue status
+        id: issue_status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.get({
+              ...context.repo,
+              issue_number: context.issue.number
+            });
+
+            core.setOutput(
+              'is_open',
+              issue.data.state === 'open' ? 'true' : 'false'
+            );
+
+      # Get repository files.
       - name: Checkout repository
+        if: steps.issue_status.outputs.is_open == 'true'
         uses: actions/checkout@v4
         with:
           ref: main
 
       # Set up Python.
       - name: Set up Python
+        if: steps.issue_status.outputs.is_open == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # Run the script that updates videos.json.
+      # Run the Python script to update videos.json.
       - name: Update videos.json
         id: update
+        if: steps.issue_status.outputs.is_open == 'true'
         continue-on-error: true
         run: python .github/scripts/add_exercise.py
 
-      # Commit the updated video library.
+      # Commit and push the updated library.
       - name: Commit updated video library
         id: commit
         if: steps.update.outcome == 'success'
@@ -49,23 +82,27 @@ jobs:
 
           git push origin HEAD:main
 
-      # Comment on the issue and close it if successful.
+      # Report the result on the GitHub issue.
       - name: Report result
-        if: always()
+        if: always() && steps.issue_status.outputs.is_open == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const issue_number = context.issue.number;
 
-            const succeeded =
-              '${{ steps.update.outcome }}' === 'success' &&
+            const updateSucceeded =
+              '${{ steps.update.outcome }}' === 'success';
+
+            const commitSucceeded =
               '${{ steps.commit.outcome }}' === 'success';
 
-            if (succeeded) {
+            if (updateSucceeded && commitSucceeded) {
+
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number,
-                body: 'Successfully added this exercise to `videos.json`!'
+                body:
+                  'Successfully added this exercise to the RightMoveRX exercise library!'
               });
 
               await github.rest.issues.update({
@@ -73,10 +110,14 @@ jobs:
                 issue_number,
                 state: 'closed'
               });
+
             } else {
+
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number,
-                body: 'There was a problem adding this exercise. Please check the GitHub Actions run for details.'
+                body:
+                  'There was a problem adding this exercise to the library. Please check the Actions tab for details.'
               });
+
             }
