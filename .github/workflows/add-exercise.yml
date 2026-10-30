@@ -1,8 +1,9 @@
+```yaml
 name: Add Exercise to Video Library
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 permissions:
   contents: write
@@ -10,25 +11,31 @@ permissions:
 
 jobs:
   add-exercise:
+    # Only process issues with the exercise-submission label.
     if: contains(github.event.issue.labels.*.name, 'exercise-submission')
+
     runs-on: ubuntu-latest
 
     steps:
+      # Get the repository files.
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: main
 
+      # Set up Python.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
+      # Run the script that updates videos.json.
       - name: Update videos.json
         id: update
         continue-on-error: true
         run: python .github/scripts/add_exercise.py
 
+      # Commit the updated video library.
       - name: Commit updated video library
         id: commit
         if: steps.update.outcome == 'success'
@@ -36,10 +43,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add videos.json
+
           git commit -m "Add exercise from issue #${{ github.event.issue.number }}"
+
           git push origin HEAD:main
 
+      # Comment on the issue and close it if successful.
       - name: Report result
         if: always()
         uses: actions/github-script@v7
@@ -70,3 +81,4 @@ jobs:
                 body: 'There was a problem adding this exercise. Please check the GitHub Actions run for details.'
               });
             }
+```
