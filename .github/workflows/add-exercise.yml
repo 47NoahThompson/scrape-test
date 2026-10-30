@@ -1,108 +1,199 @@
+
 name: Add Exercise to Video Library
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened]
 
-# Permissions required to update videos.json and manage issues.
 permissions:
   contents: write
   issues: write
 
-# Prevent multiple submissions from updating videos.json simultaneously.
-concurrency:
-  group: add-exercise-video-library
-  queue: max
-
 jobs:
   add-exercise:
-    # Only process submissions with the correct label.
-    if: >-
-      contains(github.event.issue.labels.*.name, 'exercise-submission') &&
-      (
-        github.event.action == 'opened' ||
-        (
-          github.event.action == 'labeled' &&
-          github.event.label.name == 'exercise-submission'
-        )
-      )
-
+    if: contains(github.event.issue.labels.*.name, 'exercise-submission')
     runs-on: ubuntu-latest
 
     steps:
-      # Check whether this issue is still open.
-      - name: Check issue status
-        id: issue_status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issue = await github.rest.issues.get({
-              ...context.repo,
-              issue_number: context.issue.number
-            });
-
-            core.setOutput(
-              'is_open',
-              issue.data.state === 'open' ? 'true' : 'false'
-            );
-
-      # Get repository files.
+      # 1. Get the repository
       - name: Checkout repository
-        if: steps.issue_status.outputs.is_open == 'true'
         uses: actions/checkout@v4
         with:
           ref: main
 
-      # Set up Python.
+      # 2. Set up Python
       - name: Set up Python
-        if: steps.issue_status.outputs.is_open == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      # Run the Python script to update videos.json.
+      # 3. Log submission information
+      - name: Log submission information
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+        run: |
+          echo "::group::Submission Information"
+          echo "Issue number: $ISSUE_NUMBER"
+          echo "Issue title: $ISSUE_TITLE"
+          echo "Submitted by: $ISSUE_USER"
+          echo "Branch: main"
+          echo "::endgroup::"
+
+      # 4. Validate videos.json before processing
+      - name: Validate videos.json
+        id: validate
+        continue-on-error: true
+        run: |
+          echo "::group::Validating videos.json"
+
+          if [ ! -f videos.json ]; then
+            echo "videos.json does not exist yet."
+            echo "The Python script will create it."
+          else
+            echo "videos.json exists."
+            echo "File size:"
+            wc -c videos.json
+
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("videos.json")
+
+          try:
+              with path.open("r", encoding="utf-8") as file:
+                  videos = json.load(file)
+
+              if not isinstance(videos, list):
+                  raise ValueError("videos.json must contain a JSON array.")
+
+              print(f"JSON is valid.")
+              print(f"Existing exercises: {len(videos)}")
+
+          except Exception as error:
+              print(f"VALIDATION FAILED: {error}")
+              raise
+          PY
+          fi
+
+          echo "::endgroup::"
+
+      # 5. Run the Python script
       - name: Update videos.json
         id: update
-        if: steps.issue_status.outputs.is_open == 'true'
+        if: steps.validate.outcome == 'success'
         continue-on-error: true
-        run: python .github/scripts/add_exercise.py
+        run: |
+          echo "::group::Running Python Script"
 
-      # Commit and push the updated library.
+          echo "Python version:"
+          python --version
+
+          echo "Running add_exercise.py..."
+          python -u .github/scripts/add_exercise.py
+
+          echo "Python script completed successfully."
+          echo "::endgroup::"
+
+      # 6. Inspect the resulting JSON
+      - name: Inspect videos.json
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "::group::Inspecting videos.json"
+
+          if [ -f videos.json ]; then
+            echo "File exists."
+            echo "File size:"
+            wc -c videos.json
+
+            echo "Validating resulting JSON..."
+            python -m json.tool videos.json > /dev/null
+
+            echo "JSON validation passed."
+
+            python - <<'PY'
+          import json
+
+          with open("videos.json", "r", encoding="utf-8") as file:
+              videos = json.load(file)
+
+          print(f"Total exercises: {len(videos)}")
+
+          if videos:
+              print("Most recently listed exercise:")
+              print(json.dumps(videos[-1], indent=2, ensure_ascii=False))
+          PY
+          else
+            echo "ERROR: videos.json was not found."
+            exit 1
+          fi
+
+          echo "::endgroup::"
+
+      # 7. Commit and push changes
       - name: Commit updated video library
         id: commit
         if: steps.update.outcome == 'success'
         continue-on-error: true
         run: |
+          echo "::group::Committing Changes"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add videos.json
 
+          if git diff --cached --quiet; then
+            echo "ERROR: No changes to commit."
+            exit 1
+          fi
+
+          echo "Committing videos.json..."
           git commit -m "Add exercise from issue #${{ github.event.issue.number }}"
 
+          echo "Pushing changes to main..."
           git push origin HEAD:main
 
-      # Report the result on the GitHub issue.
+          echo "Commit and push completed successfully."
+          echo "::endgroup::"
+
+      # 8. Report the result on the issue
       - name: Report result
-        if: always() && steps.issue_status.outputs.is_open == 'true'
+        if: always()
         uses: actions/github-script@v7
+        env:
+          VALIDATION_OUTCOME: ${{ steps.validate.outcome }}
+          UPDATE_OUTCOME: ${{ steps.update.outcome }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
         with:
           script: |
             const issue_number = context.issue.number;
 
-            const updateSucceeded =
-              '${{ steps.update.outcome }}' === 'success';
+            const validation = process.env.VALIDATION_OUTCOME;
+            const update = process.env.UPDATE_OUTCOME;
+            const commit = process.env.COMMIT_OUTCOME;
 
-            const commitSucceeded =
-              '${{ steps.commit.outcome }}' === 'success';
+            const runUrl =
+              `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            if (updateSucceeded && commitSucceeded) {
+            console.log("Workflow results:");
+            console.log("Validation:", validation);
+            console.log("Python script:", update);
+            console.log("Commit:", commit);
 
+            const succeeded =
+              validation === 'success' &&
+              update === 'success' &&
+              commit === 'success';
+
+            if (succeeded) {
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number,
-                body:
-                  'Successfully added this exercise to the RightMoveRX exercise library!'
+                body: 'Successfully added this exercise to `videos.json`! The video library has been updated.'
               });
 
               await github.rest.issues.update({
@@ -111,13 +202,23 @@ jobs:
                 state: 'closed'
               });
 
+              console.log("Issue successfully closed.");
             } else {
+              const body = [
+                'There was a problem adding this exercise to the video library.',
+                '',
+                `- JSON validation: **${validation}**`,
+                `- Python script: **${update}**`,
+                `- Commit and push: **${commit}**`,
+                '',
+                `[View the workflow logs](${runUrl})`
+              ].join('\n');
 
               await github.rest.issues.createComment({
                 ...context.repo,
                 issue_number,
-                body:
-                  'There was a problem adding this exercise to the library. Please check the Actions tab for details.'
+                body
               });
 
+              console.log("Failure comment posted. Issue remains open.");
             }
